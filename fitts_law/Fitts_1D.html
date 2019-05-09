@@ -1,0 +1,277 @@
+<html>
+	<head>
+		<title>Fitts' Law 1D</title>
+	</head>
+	<body scroll="no">
+		<script type="text/javascript">
+			/*Author:
+				Daniel Martinez	 				
+			*/
+			 var middle; //Middle of the browser windows to draw the line
+			 var canvas; //Main canvas
+			 var ctx; //canvas context
+			 var rectId = 0; //number to identify the squares in the results
+			 var results = new Array(); //array with the results
+			 var timeRectAppear; //time when the rectangle appears
+			 var currentRect = null; //current rectangle displayed
+			 var previousRect = null; //previous rectangle displayed
+			 var firstTime = true; //flag to check if it's the first time running the script
+			 var rectangles = new Array(); //array that contains all rectangles to display
+			 const rectangleSizes = [
+				{type:1, width:20, height:10},
+				{type:2, width:40, height:20}, 
+				{type:3, width:60, height:30},
+				{type:4, width:80, height:40},
+				{type:5, width:100, height:50}
+				]; //all the 5 different sizes of rectangles
+			 
+			 
+			window.onload = function setup() 
+			{
+				
+				/*At the beginning we hide some elements not relevant for the experiment*/
+				document.getElementById("btnResults").style.visibility = "hidden";
+				document.getElementById("txtResults").style.visibility = "hidden";
+				document.getElementById("btnCopy").style.visibility = "hidden";
+				
+				
+				//console.log(JSON.stringify(rectangles));
+			};
+			
+			/*this function gives a random position for the rectangles keeping in mind their width
+			  to prevent displaying them outside the browser window boundary*/
+			function generatePosition(rectWidth)
+			{
+				
+				var maxWidth = canvas.width;
+				return Math.random() * (maxWidth-rectWidth);
+			}
+			 
+			
+			/*function to get the Dimensions of the Browser*/
+			const getWindowDimensions = () => {
+			const width = Math.min(
+				document.body.scrollWidth,
+				document.documentElement.scrollWidth,
+				document.body.offsetWidth,
+				document.documentElement.offsetWidth,
+				document.documentElement.clientWidth
+			);
+			  
+			const height = Math.min(
+				document.body.scrollHeight,
+				document.documentElement.scrollHeight,
+				document.body.offsetHeight,
+				document.documentElement.offsetHeight,
+				document.documentElement.clientHeight
+			);
+			  
+			return { width , height  };
+			};
+			
+			/*Starts the experiment*/
+			function start()
+			{
+				setCanvas(); //we set the canvas up
+				
+				/*We fill the rectangles array with all the rectangles*/
+				for(var i = 0; i < 10; i++)
+				{
+					for(var j = 0; j < rectangleSizes.length; j++)
+					{
+						var posX = generatePosition(rectangleSizes[j].width); //obtain a random position along the line for this rectangle. 
+						/*create a rectangle object*/
+						var rectangle =
+						{	x: posX, 
+							y: middle - rectangleSizes[j].height/2, 
+							color:"rgb(255, 0, 0)", 
+							width: rectangleSizes[j].width, height: rectangleSizes[j].height
+						};
+						rectangles.push(rectangle); //insert rectangle in array
+						
+					}
+					
+				}
+				
+				document.getElementById("text").innerHTML = "";
+				document.getElementById("start").style.visibility = "hidden"; //hides start button
+				document.body.style.background = "gray";	
+				document.body.style.margin = "0px";
+				drawLine(); //draws the line in the middle of the browser
+				drawSquares(); //main function to display the rectangles
+			}
+			
+			/*general purpuse to set up the canvas properties*/
+			function setCanvas()
+			{
+				
+				canvas = document.getElementById("canvasLayer");
+				var dimensions = getWindowDimensions();
+				canvas.width = dimensions.width ;
+				canvas.height = dimensions.height - dimensions.height*0.1; //reduce 10% the height of the canvas based on the browser to avoid scrolling (just to be safe)
+				canvas.style.border = "0px solid";
+				middle = canvas.height/2;
+				ctx = canvas.getContext("2d");				
+			}
+			
+			/*draws the line in the middle of the browser*/
+			function drawLine()
+			{
+				var dimensions = getWindowDimensions();
+				ctx.moveTo(0,middle);
+				ctx.lineTo(dimensions.width ,middle);				
+				ctx.stroke();
+			}
+			
+			/*main function to display the rectangles*/
+			function drawSquares()
+			{
+				if(rectangles.length > 0) //check if there are more rectangles in the array
+				{
+					previousRect = currentRect; //set the previous rectangle
+					currentRect =  rectangles.splice(Math.floor(Math.random()*rectangles.length),1)[0]; //obtain a rectangle and remove it from the array
+					ctx.fillStyle = currentRect.color;	//set the rectangle color
+					
+					if(!firstTime) //if this is not the first rectangle
+					{
+						timeRectAppear = new Date().getTime(); //set the current time 
+						var xPos = safeDistance(currentRect, previousRect); //check if the current rectangle has the minimum distance from the previous rectangle and return the position
+						currentRect.x = xPos; //set the safe position to the current rectangle
+					}
+					ctx.fillRect(currentRect.x, currentRect.y, currentRect.width, currentRect.height); //draw the rectangle
+					
+					if(firstTime) //if this is the first time we add the event listener. We don't want to add it multiple times
+					{
+						/*The event listener function calls checkCollision with the mouse click coordinates and the current rectangle information*/
+						canvas.addEventListener('click',(e) => {
+						const pos = {
+							x: e.offsetX,
+							y: e.offsetY
+						};
+						checkCollision(pos, currentRect);					
+						});
+						firstTime = false;
+					}
+				}
+				else //once the array is done, the experiment is finished
+				{
+					document.getElementById("text").innerHTML = "Experiment Done";
+					document.body.style.background = "white";
+					document.getElementById("btnResults").style.visibility = "visible";					
+					ctx.clearRect(0, 0, canvas.width, canvas.height);	//clear the canvas
+					
+				}
+			}
+			
+			/*recursive function that makes sure that the distance between the previous rectangle and the current rectangle is at least 30px*/
+			function safeDistance(curr, prev)
+			{
+				var prevMidPoint = (prev.x + prev.width) / 2;
+				var currMidPoint = (curr.x + curr.width) / 2;
+				if(Math.abs(prevMidPoint - currMidPoint) >= 30)
+					return curr.x;
+				else
+				{
+					var temp = curr;
+					temp.x = generatePosition(curr.width);
+					return safeDistance(temp, prev);					
+				}
+			}
+			
+			/*checks if the participant clicked inside a rectangle*/
+			function checkCollision(pointerPos, rectangle)
+			{
+				
+				if( (pointerPos.x >= rectangle.x && pointerPos.x <= rectangle.x + rectangle.width) && (pointerPos.y >= rectangle.y && pointerPos.y <= rectangle.y + rectangle.height))
+				{
+					//if click is inside rectangle ...
+					var currentTime = new Date().getTime(); // get the current time
+					ctx.clearRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height); //delete the rectangle from canvas	
+					ctx.fillStyle = "gray"; 
+					ctx.fillRect(0, 0, canvas.width, canvas.height); //reset the canvas style
+					drawLine(); //draw the line again
+					var device = isMobile() ? 'Smartphone' : 'PC'; 		//obtain device type			
+					
+					var deltaTime = currentTime - timeRectAppear; //obtain time elapsed
+					var resultObj; 
+					if(previousRect == null) //if this is the first rectangle...
+					{
+						//the resultObj will have id 1 and no previous rectangle and no distance. This item will be the origin.
+						resultObj = 
+						{
+							id: ++rectId,
+							timeElapsed: deltaTime,
+							currentRectangle: currentRect,
+							previousRectangle: null,
+							distance: null,
+							device: device
+						};
+					}
+					else
+					{
+						//set up all information for the resultObj
+						resultObj = 
+						{
+							id: ++rectId,
+							timeElapsed: deltaTime,
+							currentRectangle: currentRect,
+							previousRectangle: previousRect,
+							distance: Math.abs((currentRect.x + currentRect.width)/2 - (previousRect.x + previousRect.width)/2), //distance from the middle point of the rectangles
+							device: device
+						};
+					}
+					results.push(resultObj); //insert resultObj to results array
+					
+					drawSquares(); 	//draw the next rectangle
+					
+				}
+			}
+			
+			/*displays the results array as a JSON string which later can be parsed in an online tool for further analysis*/
+			function showResults()
+			{
+				document.getElementById("txtResults").style.visibility = "visible";
+				document.getElementById("btnCopy").style.visibility = "visible";
+				var textField = document.getElementById("txtResults");
+				textField.value = JSON.stringify(results);
+			
+			}
+			
+			/*copy the results to the clipboard*/
+			function copytoClipboard()
+			{
+			
+			  /* Get the text field */
+			  var copyText = document.getElementById("txtResults");
+
+			  /* Select the text field */
+			  copyText.select();
+
+			  /* Copy the text inside the text field */
+			  document.execCommand("copy");
+
+			  /* Alert the copied text */
+			  alert("Results are on Clipboard");
+			  
+			 }
+
+			/*determines if it's a mobile browser*/
+			function isMobile() {
+				return (navigator.userAgent.match(/Android/i) || navigator.userAgent.match(/BlackBerry/i) || 
+				navigator.userAgent.match(/iPhone|iPad|iPod/i) || navigator.userAgent.match(/Opera Mini/i) ||  navigator.userAgent.match(/IEMobile/i));
+			}
+			
+			
+		</script>
+		<h1 id="title">Fitts' Law</h1>
+		<p id="text">Click/Tap on the red squares as fast as you can.</p>
+		 <div id="div1">
+			<button id="start" onclick="start()">Start!</button><br>
+			<button id="btnResults" onclick="showResults()">Get Results</button><br>
+			<input id="txtResults" type="text"></input><br>
+			<button id="btnCopy" onclick="copytoClipboard()">Copy to Clipboard </button>
+		 </div>
+		 
+		<canvas id="canvasLayer"></canvas>
+	</body>	
+</html>
